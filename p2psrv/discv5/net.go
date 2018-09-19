@@ -179,6 +179,7 @@ func (net *Network) Close() {
 	}
 }
 
+
 // Self returns the local node.
 // The returned node should not be modified by the caller.
 func (net *Network) Self() *Node {
@@ -742,6 +743,7 @@ func (net *Network) internNodeFromNeighbours(sender *net.UDPAddr, rn rpcNode) (n
 	if n == nil {
 		// We haven't seen this node before.
 		n, err = nodeFromRPC(sender, rn)
+
 		if net.netrestrict != nil && !net.netrestrict.Contains(n.IP) {
 			return n, errors.New("not contained in netrestrict whitelist")
 		}

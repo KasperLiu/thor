@@ -242,6 +242,14 @@ func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, nodeDBP
 	log.Info("UDP listener up", "net", net.tab.self)
 	transport.net = net
 	go transport.readLoop()
+	//go func() {
+	//	for{
+	//		time.Sleep(10*time.Second)
+	//		fmt.Println("transport net:",transport.net.netrestrict)
+	//	}
+	//
+	//}()
+
 	return net, nil
 }
 

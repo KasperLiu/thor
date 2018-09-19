@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/xenv"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func (c *Consensus) validate(
@@ -34,8 +35,8 @@ func (c *Consensus) validate(
 	if err := c.validateProposer(header, parentHeader, state); err != nil {
 		return nil, nil, err
 	}
-
-	if err := c.validateBlockBody(block); err != nil {
+//edit by sion
+	if err := c.validateBlockBody(block,parentHeader); err != nil {
 		return nil, nil, err
 	}
 
@@ -52,11 +53,15 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 
-	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval != 0 {
+	// by kasper
+	//if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval != 0 {
+	if (header.Timestamp()-parent.Timestamp())%c.GetBlockInterval(parent) != 0 {
 		return consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 
-	if header.Timestamp() > nowTimestamp+thor.BlockInterval {
+	// by kasper
+	//if header.Timestamp() > nowTimestamp+thor.BlockInterval {
+	if header.Timestamp() > nowTimestamp+c.GetBlockInterval(parent) {
 		return errFutureBlock
 	}
 
@@ -98,11 +103,11 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		return consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
 
-	if !sched.IsTheTime(header.Timestamp()) {
+	if !sched.IsTheTime(header.Timestamp(), c.GetBlockInterval(parent)) {
 		return consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
 
-	updates, score := sched.Updates(header.Timestamp())
+	updates, score := sched.Updates(header.Timestamp(), c.GetBlockInterval(parent))
 	if parent.TotalScore()+score != header.TotalScore() {
 		return consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
@@ -113,17 +118,30 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 
 	return nil
 }
-
-func (c *Consensus) validateBlockBody(blk *block.Block) error {
+//edit by sion
+func (c *Consensus) validateBlockBody(blk *block.Block,parent *block.Header ) error {
 	header := blk.Header()
 	txs := blk.Transactions()
 	if header.TxsRoot() != txs.RootHash() {
 		return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), txs.RootHash()))
 	}
+	//edit by sion
+	state, err := c.stateCreator.NewState(parent.StateRoot())
+	if err != nil{
+		return err
+	}
+	trader:=builtin.Trader.Native(state)
+    //edit by sion
 
 	for _, tx := range txs {
-		if _, err := tx.Signer(); err != nil {
+		signer, err := tx.Signer()
+		if err != nil {
 			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
+		}
+		//edit by sion
+
+		if listed,_:=trader.Get(signer);!listed{
+			return consensusError(fmt.Sprintf("tx signature invalid"))
 		}
 
 		switch {
@@ -231,4 +249,18 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	}
 
 	return stage, receipts, nil
+}
+
+// by kasper
+// get BlockInterval
+func (c *Consensus) GetBlockInterval(parent *block.Header) uint64 {
+	state,err:=c.stateCreator.NewState(parent.StateRoot())
+	if err != nil{
+		log.Warn("GetBlockInterval(): can not get state, set to default value")
+		return uint64(10)
+	}
+	blockInterval := builtin.Params.Native(state).Get(thor.KeyBlockInterval)
+
+	return blockInterval.Uint64()
+
 }

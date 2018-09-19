@@ -348,7 +348,11 @@ func (rt *Runtime) ExecuteTransaction(tx *tx.Transaction) (receipt *tx.Receipt, 
 
 	// reward
 	rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
-	overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.ctx.Number-1, rt.Seeker().GetID)
+	// by kasper
+	// add a parameter to replace thor.BlockInterval
+	// overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.ctx.Number-1, rt.Seeker().GetID)
+	blockInterval := builtin.Params.Native(rt.state).Get(thor.KeyBlockInterval).Uint64()
+	overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.ctx.Number-1, rt.Seeker().GetID, blockInterval)
 
 	reward := new(big.Int).SetUint64(receipt.GasUsed)
 	reward.Mul(reward, overallGasPrice)

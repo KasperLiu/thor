@@ -31,6 +31,7 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 var log = log15.New("pkg", "node")
@@ -116,6 +117,21 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 	return nil
 }
 
+//edit by sion
+func (n *Node) GetRestrictList() *netutil.Netlist{
+	var restrictList *netutil.Netlist
+	bestBlock:=n.chain.BestBlock()
+	restrictList=n.packer.GetRestrict(bestBlock.Header())
+	return restrictList
+}
+
+// by kasper
+// get BlockInterval from packer
+func (n *Node) GetBlockInterval() uint64 {
+	log.Debug("Get BlockInterval from packer")
+	return n.packer.GetBlockInterval(n.chain.BestBlock().Header())
+}
+
 func (n *Node) houseKeeping(ctx context.Context) {
 	log.Debug("enter house keeping")
 	defer log.Debug("leave house keeping")
@@ -126,7 +142,11 @@ func (n *Node) houseKeeping(ctx context.Context) {
 	newBlockCh := make(chan *comm.NewBlockEvent)
 	scope.Track(n.comm.SubscribeBlock(newBlockCh))
 
-	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
+	// by kasper
+	// how to update block interval to this ticker ?
+	//futureTicker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
+	blockInterval := n.GetBlockInterval()
+	futureTicker := time.NewTicker(time.Duration(blockInterval) * time.Second)
 	defer futureTicker.Stop()
 
 	connectivityTicker := time.NewTicker(time.Second)
@@ -176,12 +196,20 @@ func (n *Node) houseKeeping(ctx context.Context) {
 					log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
 				}
 			}
+			// by kasper
+			// dynamically change ticker interval with blockInterval
+			if blockInterval != n.GetBlockInterval(){
+				blockInterval = n.GetBlockInterval()
+				futureTicker.Stop()
+				futureTicker = time.NewTicker(time.Duration(blockInterval) * time.Second)
+				log.Info("houseKeeping: change futureTicker", "futureTicker", blockInterval)
+			}
 		case <-connectivityTicker.C:
 			if n.comm.PeerCount() == 0 {
 				noPeerTimes++
 				if noPeerTimes > 30 {
 					noPeerTimes = 0
-					go checkClockOffset()
+					go checkClockOffset(n.GetBlockInterval())
 				}
 			} else {
 				noPeerTimes = 0
@@ -328,13 +356,17 @@ branch:   %v  %v`, fork.Ancestor,
 	}
 }
 
-func checkClockOffset() {
+// by kasper
+// add a parameter to this function
+func checkClockOffset(blockInterval uint64) {
 	resp, err := ntp.Query("ap.pool.ntp.org")
 	if err != nil {
 		log.Debug("failed to access NTP", "err", err)
 		return
 	}
-	if resp.ClockOffset > time.Duration(thor.BlockInterval)*time.Second/2 {
+	// before add a parameter:
+	//if resp.ClockOffset > time.Duration(thor.BlockInterval)*time.Second/2 {
+	if resp.ClockOffset > time.Duration(blockInterval)*time.Second/2 {
 		log.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
 	}
 }

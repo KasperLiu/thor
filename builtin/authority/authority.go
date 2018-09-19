@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 var (
@@ -69,27 +70,35 @@ func (a *Authority) setAddressPtr(key thor.Bytes32, addr *thor.Address) {
 }
 
 // Get get candidate by node master address.
-func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, active bool) {
+//edit by sion
+func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, nodeIp string, active bool) {
 	entry := a.getEntry(nodeMaster)
 	if entry.IsLinked() {
-		return true, entry.Endorsor, entry.Identity, entry.Active
+		return true, entry.Endorsor, entry.Identity, entry.NodeIp, entry.Active//edit by sion
 	}
 	// if it's the only node, IsLinked will be false.
 	// check whether it's the head.
 	ptr := a.getAddressPtr(headKey)
 	listed = ptr != nil && *ptr == nodeMaster
-	return listed, entry.Endorsor, entry.Identity, entry.Active
+	return listed, entry.Endorsor, entry.Identity, entry.NodeIp, entry.Active//edit by sion
 }
 
 // Add add a new candidate.
-func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity thor.Bytes32) bool {
+//edit by sion
+func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity thor.Bytes32, nodeIp string) bool {
 	entry := a.getEntry(nodeMaster)
 	if !entry.IsEmpty() {
 		return false
 	}
+  //edit by sion
+	_,err:=netutil.ParseNetlist(nodeIp)
+	if err != nil {
+			return false
+	}
 
 	entry.Endorsor = endorsor
 	entry.Identity = identity
+	entry.NodeIp = nodeIp //edit by sion
 	entry.Active = true // defaults to active
 
 	tailPtr := a.getAddressPtr(tailKey)
@@ -161,12 +170,32 @@ func (a *Authority) Candidates(endorsement *big.Int, limit uint64) []*Candidate 
 				NodeMaster: *ptr,
 				Endorsor:   entry.Endorsor,
 				Identity:   entry.Identity,
+				NodeIp:     entry.NodeIp, //edit by sion
 				Active:     entry.Active,
 			})
 		}
 		ptr = entry.Next
 	}
 	return candidates
+}
+
+//edit by sion
+func (a *Authority) Restricts() string{
+	var netrestricts = ""
+	var entry *entry
+	ptr := a.getAddressPtr(headKey)
+	if ptr != nil{
+		entry =a.getEntry(*ptr)
+		netrestricts=entry.NodeIp
+		ptr=entry.Next
+	}
+
+	for ptr!=nil{
+		entry=a.getEntry(*ptr)
+		netrestricts=netrestricts+","+entry.NodeIp
+		ptr=entry.Next
+	}
+	return netrestricts
 }
 
 // First returns node master address of first entry.

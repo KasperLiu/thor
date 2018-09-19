@@ -9,6 +9,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin/authority"
+	//edit by sion
+	"github.com/vechain/thor/builtin/trader"
 	"github.com/vechain/thor/builtin/energy"
 	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/builtin/params"
@@ -22,6 +24,8 @@ import (
 var (
 	Params    = &paramsContract{mustLoadContract("Params")}
 	Authority = &authorityContract{mustLoadContract("Authority")}
+	//edit by sion
+	Trader = &traderContract{mustLoadContract("Trader")}
 	Energy    = &energyContract{mustLoadContract("Energy")}
 	Executor  = &executorContract{mustLoadContract("Executor")}
 	Prototype = &prototypeContract{mustLoadContract("Prototype")}
@@ -32,6 +36,8 @@ var (
 type (
 	paramsContract    struct{ *contract }
 	authorityContract struct{ *contract }
+	//edit by sion
+	traderContract    struct{ *contract }
 	energyContract    struct{ *contract }
 	executorContract  struct{ *contract }
 	prototypeContract struct{ *contract }
@@ -44,6 +50,11 @@ func (p *paramsContract) Native(state *state.State) *params.Params {
 
 func (a *authorityContract) Native(state *state.State) *authority.Authority {
 	return authority.New(a.Address, state)
+}
+
+//edit by sion
+func (t *traderContract) Native(state *state.State) *trader.Trader{
+	return trader.New(t.Address, state)
 }
 
 func (e *energyContract) Native(state *state.State, blockTime uint64) *energy.Energy {

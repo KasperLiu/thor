@@ -61,14 +61,20 @@ func (s *Scheduler) whoseTurn(t uint64) Proposer {
 
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
-func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
-	const T = thor.BlockInterval
+// by kasper
+// add a parameter to replace thor.BlockInterval
+func (s *Scheduler) Schedule(nowTime uint64, blockInterval uint64) (newBlockTime uint64) {
+	// by kasper
+	//const T = thor.BlockInterval
 
-	newBlockTime = s.parentBlockTime + T
+	// by kasper
+	newBlockTime = s.parentBlockTime + blockInterval//T
 
 	if nowTime > newBlockTime {
 		// ensure T aligned, and >= nowTime
-		newBlockTime += (nowTime - newBlockTime + T - 1) / T * T
+		// by kasper
+		//newBlockTime += (nowTime - newBlockTime + T - 1) / T * T
+		newBlockTime += (nowTime - newBlockTime + blockInterval - 1) / blockInterval * blockInterval
 	}
 
 	for {
@@ -78,18 +84,24 @@ func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
 		}
 
 		// try next time slot
-		newBlockTime += T
+		// by kasper
+		//newBlockTime += T
+		newBlockTime += blockInterval
 	}
 }
 
 // IsTheTime returns if the newBlockTime is correct for the proposer.
-func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
+// by kasper
+// add a parameter to replace thor.BlockInterval
+func (s *Scheduler) IsTheTime(newBlockTime uint64, blockInterval uint64) bool {
 	if s.parentBlockTime >= newBlockTime {
 		// invalid block time
 		return false
 	}
 
-	if (newBlockTime-s.parentBlockTime)%thor.BlockInterval != 0 {
+	// by kasper
+	//if (newBlockTime-s.parentBlockTime)%thor.BlockInterval != 0 {
+	if (newBlockTime-s.parentBlockTime)%blockInterval != 0 {
 		// invalid block time
 		return false
 	}
@@ -98,17 +110,22 @@ func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
 }
 
 // Updates returns proposers whose status are change, and the score when new block time is assumed to be newBlockTime.
-func (s *Scheduler) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
+// by kasper
+// add a parameter to replace thor.BlockInterval
+func (s *Scheduler) Updates(newBlockTime uint64, blockInterval uint64) (updates []Proposer, score uint64) {
 
 	toDeactivate := make(map[thor.Address]Proposer)
-
-	t := newBlockTime - thor.BlockInterval
+	// by kasper
+	//t := newBlockTime - thor.BlockInterval
+	t := newBlockTime - blockInterval
 	for i := uint64(0); i < thor.MaxBlockProposers && t > s.parentBlockTime; i++ {
 		p := s.whoseTurn(t)
 		if p.Address != s.proposer.Address {
 			toDeactivate[p.Address] = p
 		}
-		t -= thor.BlockInterval
+		// by kasper
+		//t -= thor.BlockInterval
+		t -= blockInterval
 	}
 
 	updates = make([]Proposer, 0, len(toDeactivate)+1)
@@ -139,3 +156,4 @@ func dprp(blockNumber uint32, time uint64) uint64 {
 
 	return binary.BigEndian.Uint64(thor.Blake2b(b4[:], b8[:]).Bytes())
 }
+

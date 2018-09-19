@@ -43,10 +43,17 @@ var (
 	KeyRewardRatio         = BytesToBytes32([]byte("reward-ratio"))
 	KeyBaseGasPrice        = BytesToBytes32([]byte("base-gas-price"))
 	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
+	// by kasper
+	// blockinterval maybe add here
+	KeyBlockInterval       = BytesToBytes32([]byte("block-interval"))
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
-	InitialBaseGasPrice        = big.NewInt(1e15)
+	//InitialBaseGasPrice        = big.NewInt(1e15)
+	InitialBaseGasPrice        = new(big.Int).SetUint64(0)
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	// by kasper
+	// blockinterval's initial value
+	InitialBlockInterval       = new(big.Int).SetUint64(10)
 
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 )

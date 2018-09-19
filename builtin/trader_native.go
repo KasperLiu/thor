@@ -23,19 +23,15 @@ func init() {
 		}},
 		{"native_add", func(env *xenv.Environment) []interface{} {
 			var args struct {
-				NodeMaster common.Address
-				Endorsor   common.Address
+				AccountTrader common.Address
 				Identity   common.Hash
-				NodeIp     string//edit by sion
 			}
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			ok := Authority.Native(env.State()).Add(
-				thor.Address(args.NodeMaster),
-				thor.Address(args.Endorsor),
-				thor.Bytes32(args.Identity),
-                string(args.NodeIp))//edit by sion
+			ok := Trader.Native(env.State()).Add(
+				thor.Address(args.AccountTrader),
+				thor.Bytes32(args.Identity))
 
 			if ok {
 				env.UseGas(thor.SstoreSetGas)
@@ -44,65 +40,48 @@ func init() {
 			return []interface{}{ok}
 		}},
 		{"native_revoke", func(env *xenv.Environment) []interface{} {
-			var nodeMaster common.Address
-			env.ParseArgs(&nodeMaster)
+			var accountTrader common.Address
+			env.ParseArgs(&accountTrader)
 
 			env.UseGas(thor.SloadGas)
-			ok := Authority.Native(env.State()).Revoke(thor.Address(nodeMaster))
+			ok := Trader.Native(env.State()).Revoke(thor.Address(accountTrader))
 			if ok {
 				env.UseGas(thor.SstoreResetGas * 3)
 			}
 			return []interface{}{ok}
 		}},
 		{"native_get", func(env *xenv.Environment) []interface{} {
-			var nodeMaster common.Address
-			env.ParseArgs(&nodeMaster)
+			var accountTrader common.Address
+			env.ParseArgs(&accountTrader)
 
 			env.UseGas(thor.SloadGas * 2)
-			//edit by sion
-			listed, endorsor, identity, nodeIp, active := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
 
-			return []interface{}{listed, endorsor, identity, nodeIp, active}//edit by sion
+			listed, identity := Trader.Native(env.State()).Get(thor.Address(accountTrader))
+
+			return []interface{}{listed, identity}
 		}},
 		{"native_first", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			if nodeMaster := Authority.Native(env.State()).First(); nodeMaster != nil {
-				return []interface{}{*nodeMaster}
+			if accountTrader := Trader.Native(env.State()).First(); accountTrader != nil {
+				return []interface{}{*accountTrader}
 			}
 			return []interface{}{thor.Address{}}
 		}},
 		{"native_next", func(env *xenv.Environment) []interface{} {
-			var nodeMaster common.Address
-			env.ParseArgs(&nodeMaster)
+			var accountTrader common.Address
+			env.ParseArgs(&accountTrader)
 
 			env.UseGas(thor.SloadGas)
-			if next := Authority.Native(env.State()).Next(thor.Address(nodeMaster)); next != nil {
+			if next := Trader.Native(env.State()).Next(thor.Address(accountTrader)); next != nil {
 				return []interface{}{*next}
 			}
 			return []interface{}{thor.Address{}}
 		}},
-		{"native_isEndorsed", func(env *xenv.Environment) []interface{} {
-			var nodeMaster common.Address
-			env.ParseArgs(&nodeMaster)
-
-			env.UseGas(thor.SloadGas * 2)
-			listed, endorsor,_, _, _ := Authority.Native(env.State()).Get(thor.Address(nodeMaster))//edit by sion
-			if !listed {
-				return []interface{}{false}
-			}
-
-			env.UseGas(thor.GetBalanceGas)
-			bal := env.State().GetBalance(endorsor)
-
-			env.UseGas(thor.SloadGas)
-			endorsement := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
-			return []interface{}{bal.Cmp(endorsement) >= 0}
-		}},
 	}
-	abi := Authority.NativeABI()
+	abi := Trader.NativeABI()
 	for _, def := range defines {
 		if method, found := abi.MethodByName(def.name); found {
-			nativeMethods[methodKey{Authority.Address, method.ID()}] = &nativeMethod{
+			nativeMethods[methodKey{Trader.Address, method.ID()}] = &nativeMethod{
 				abi: method,
 				run: def.run,
 			}

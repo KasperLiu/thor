@@ -28,13 +28,22 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
+	"github.com/vechain/thor/p2psrv"
+	"github.com/vechain/thor/p2psrv/discv5"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"math/rand"
 )
 
 var (
 	version   string
 	gitCommit string
 	gitTag    string
+	//edit by sion
+	newNode   *node.Node
+	serverAddress *p2psrv.Server
+	netAddress *discv5.Network
+	//edit by sion
 	log       = log15.New()
 
 	defaultTxPoolOptions = txpool.Options{
@@ -126,24 +135,110 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pcom := newP2PComm(ctx, chain, txPool, instanceDir)
+	//edit by sion
+	serverAddress=p2pcom.p2pSrv
 
 	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm))
 	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
 
 	printStartupMessage(gene, chain, master, instanceDir, apiURL)
 
+	// by kasper
+	// should be pre-set before p2pcom.start()
+	//test4p2p(serverAddress)
+
 	p2pcom.Start()
 	defer p2pcom.Stop()
 
-	return node.New(
+    //edit by sion
+    newNode=node.New(
 		master,
 		chain,
 		state.NewCreator(mainDB),
 		logDB,
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
-		p2pcom.comm).
-		Run(exitSignal)
+		p2pcom.comm)
+
+	go func() {
+		for{
+			restrict:=newNode.GetRestrictList()
+			serverAddress.SetRestrict(restrict)
+			serverAddress.DisconnectPeers()
+			//serverAddress.PickPeerInfo()
+			time.Sleep(15*time.Second)
+		}
+  }()
+    // by kasper
+    // test blockinterval value
+    log.Debug("get block interval", "BlockInterval", newNode.GetBlockInterval())
+
+	return newNode.Run(exitSignal)
+}
+
+//edit by sion
+// pre-set the net restrict
+func geneRestrict() *netutil.Netlist{
+	var netrestricts []string
+	netrestricts=make([]string,4)
+	// add real ip network from thor testnet
+	netrestricts[0]="128.1.34.86/32"
+	netrestricts[1]="35.226.220.193/32"
+	netrestricts[2]="49.51.195.89/32"
+	netrestricts[3]="107.155.60.54/32"
+	i:=rand.Intn(4)
+	netrestrict := netrestricts[i]
+	var restrictList *netutil.Netlist
+	if netrestrict != "" {
+		restrictList, _ = netutil.ParseNetlist(netrestrict)
+
+	}
+	log.Debug("Set Net Restrict", "value", *restrictList)
+
+	return restrictList
+}
+
+// by kasper
+// test for p2p control
+func test4p2p(serverAddress *p2psrv.Server){
+	go func() {
+		//for{
+		// TODO : consider that if a node does not connect all peers in the whitelist
+		//
+		//time.Sleep(5*time.Second)
+		restrict := preSetNetRestrict4Inbound() // geneRestrict()
+		serverAddress.SetRestrict(restrict)
+		//serverAddress.SetNetRestrict(restrict) //useless
+		serverAddress.DisconnectPeers()
+		//}
+
+	}()
+}
+
+// by kasper
+// pre-set whitelist not change during running for testing outbound
+func preSetNetRestrict4Outbound() *netutil.Netlist{
+	netrestrict := "128.1.34.86/32, 35.226.220.193/32, 49.51.195.89/32, 107.155.60.54/32, 203.195.230.202/32"
+	list, err := netutil.ParseNetlist(netrestrict)
+	if err != nil {
+		//Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
+		log.Error("Option ",  "Set NetRestrict: ", err)
+		return nil
+	}
+	return list
+}
+
+// by kasper
+// for inbound test
+func preSetNetRestrict4Inbound() *netutil.Netlist{
+	netrestrict := "120.78.83.87/32, 112.74.47.241/32"
+	list, err := netutil.ParseNetlist(netrestrict)
+	if err != nil {
+		//Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
+		log.Error("Option ",  "Set NetRestrict: ", err)
+		return nil
+	}
+	return list
 }
 
 func soloAction(ctx *cli.Context) error {

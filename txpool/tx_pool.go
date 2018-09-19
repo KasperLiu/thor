@@ -94,7 +94,7 @@ func (p *TxPool) housekeeping() {
 				headBlock = newHeadBlock
 				headBlockChanged = true
 			}
-			if !isChainSynced(uint64(time.Now().Unix()), headBlock.Timestamp()) {
+			if !isChainSynced(uint64(time.Now().Unix()), headBlock.Timestamp(), p.GetBlockInterval()) {
 				// skip washing txs if not synced
 				continue
 			}
@@ -165,7 +165,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 	}
 
 	headBlock := p.chain.BestBlock().Header()
-	if isChainSynced(uint64(time.Now().Unix()), headBlock.Timestamp()) {
+	if isChainSynced(uint64(time.Now().Unix()), headBlock.Timestamp(), p.GetBlockInterval()) {
 		state, err := p.stateCreator.NewState(headBlock.StateRoot())
 		if err != nil {
 			return err
@@ -300,11 +300,14 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 			continue
 		}
 
+		// by kasper
+		// add a parameter to replace thor.BlockInterval
 		if executable {
 			txObj.overallGasPrice = txObj.OverallGasPrice(
 				baseGasPrice,
 				headBlock.Number(),
-				seeker.GetID)
+				seeker.GetID,
+				p.GetBlockInterval())
 			executableObjs = append(executableObjs, txObj)
 		} else {
 			nonExecutableObjs = append(nonExecutableObjs, txObj)
@@ -363,10 +366,29 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 	return executables, 0, nil
 }
 
-func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
+// by kasper
+// get blockInterval
+func (p *TxPool) GetBlockInterval() uint64 {
+	headBlock := p.chain.BestBlock().Header()
+	state, err := p.stateCreator.NewState(headBlock.StateRoot())
+	if err != nil {
+		log.Warn("GetBlockInterval(): can not get state, set to default value")
+		return uint64(10)
+	}
+
+	blockinterval := builtin.Params.Native(state).Get(thor.KeyBlockInterval)
+
+	return blockinterval.Uint64()
+}
+
+// by kasper
+// add a parameter to get blockInterval
+func isChainSynced(nowTimestamp, blockTimestamp uint64, blockInterval uint64) bool {
 	timeDiff := nowTimestamp - blockTimestamp
 	if blockTimestamp > nowTimestamp {
 		timeDiff = blockTimestamp - nowTimestamp
 	}
-	return timeDiff < thor.BlockInterval*6
+	// before add a parameter:
+	//return timeDiff < thor.BlockInterval*6
+	return timeDiff < blockInterval*6
 }

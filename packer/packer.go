@@ -15,7 +15,13 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/xenv"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/inconshreveable/log15"
 )
+
+// by kasper
+// add logger
+var log = log15.New("pkg", "packer")
 
 // Packer to pack txs and build new blocks.
 type Packer struct {
@@ -61,6 +67,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		beneficiary = *p.beneficiary
 	}
 
+
 	for _, c := range candidates {
 		if p.beneficiary == nil && c.NodeMaster == p.nodeMaster {
 			// not beneficiary not set, set it to endorsor
@@ -78,8 +85,8 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		return nil, err
 	}
 
-	newBlockTime := sched.Schedule(nowTimestamp)
-	updates, score := sched.Updates(newBlockTime)
+	newBlockTime := sched.Schedule(nowTimestamp, p.GetBlockInterval(parent))
+	updates, score := sched.Updates(newBlockTime, p.GetBlockInterval(parent))
 
 	for _, u := range updates {
 		authority.Update(u.Address, u.Active)
@@ -98,6 +105,28 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		})
 
 	return newFlow(p, parent, rt), nil
+}
+
+//edit by sion
+func (p *Packer)GetRestrict(parent *block.Header) *netutil.Netlist{
+	var restrictList *netutil.Netlist
+	state,err:=p.stateCreator.NewState(parent.StateRoot())
+
+	if err != nil{
+		return nil
+	}
+	var authority=builtin.Authority.Native(state)
+
+	netrestricts:=authority.Restricts()
+	if netrestricts != "" {
+		restrictList, err = netutil.ParseNetlist(netrestricts)
+		if err != nil {
+			return nil
+		}
+	}
+
+	return restrictList
+
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -135,4 +164,18 @@ func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
 // it as it can.
 func (p *Packer) SetTargetGasLimit(gl uint64) {
 	p.targetGasLimit = gl
+}
+
+// by kasper
+// get BlockInterval
+func (p *Packer) GetBlockInterval(parent *block.Header) uint64{
+	state,err:=p.stateCreator.NewState(parent.StateRoot())
+	if err != nil{
+		log.Warn("GetBlockInterval(): can not get state, set to default value")
+		return uint64(10)
+	}
+
+	blockinterval := builtin.Params.Native(state).Get(thor.KeyBlockInterval)
+
+	return blockinterval.Uint64()
 }

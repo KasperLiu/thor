@@ -9,7 +9,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/vechain/thor/thor"
 )
 
 var (
@@ -21,13 +20,16 @@ var (
 
 // workToGas exchange proved work to gas.
 // The decay curve follows Moore's law.
-func workToGas(work *big.Int, blockNum uint32) uint64 {
+// by kasper
+// add a parameter to replace thor.BlockInterval
+func workToGas(work *big.Int, blockNum uint32, blockInterval uint64) uint64 {
 	gas := new(big.Int).Div(work, workPerGas)
 	if gas.Sign() == 0 {
 		return 0
 	}
-
-	months := new(big.Int).SetUint64(uint64(blockNum) * thor.BlockInterval / 3600 / 24 / 30)
+	// by kasper
+	//months := new(big.Int).SetUint64(uint64(blockNum) * thor.BlockInterval / 3600 / 24 / 30)
+	months := new(big.Int).SetUint64(uint64(blockNum) * blockInterval / 3600 / 24 / 30)
 	if months.Sign() != 0 {
 		x := &big.Int{}
 		gas.Mul(gas, x.Exp(big100, months, nil))

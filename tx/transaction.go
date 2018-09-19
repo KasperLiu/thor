@@ -309,7 +309,9 @@ func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) th
 
 // OverallGasPrice calculate overall gas price.
 // overallGasPrice = gasPrice + baseGasPrice * wgas/gas.
-func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) *big.Int {
+// by kasper
+// add a parameter to replace thor.BlockInterval
+func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32, getBlockID func(uint32) thor.Bytes32, blockInterval uint64) *big.Int {
 	gasPrice := t.GasPrice(baseGasPrice)
 
 	provedWork := t.ProvedWork(headBlockNum, getBlockID)
@@ -317,7 +319,9 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32
 		return gasPrice
 	}
 
-	wgas := workToGas(provedWork, t.BlockRef().Number())
+	// by kasper
+	// pass a parameter to replace thor.BlockInterval
+	wgas := workToGas(provedWork, t.BlockRef().Number(), blockInterval)
 	if wgas == 0 {
 		return gasPrice
 	}

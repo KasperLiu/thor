@@ -18,6 +18,10 @@ import (
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/p2psrv/discv5"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
+
+	"strings"
+	"math/rand"
 )
 
 var log = log15.New("pkg", "p2psrv")
@@ -72,6 +76,13 @@ func (s *Server) Self() *discover.Node {
 	return s.srv.Self()
 }
 
+//edit by sion
+// for inbound and outbound whitelist
+func (s *Server)SetRestrict(restricts *netutil.Netlist){
+	s.srv.NetRestrict=restricts
+}
+
+
 // Start start the server.
 func (s *Server) Start(protocols []*Protocol) error {
 	for _, proto := range protocols {
@@ -85,6 +96,22 @@ func (s *Server) Start(protocols []*Protocol) error {
 			log := log.New("peer", peer, "dir", dir)
 
 			log.Debug("peer connected")
+
+			// by kasper
+			// printing info of connected peers
+			// test disconnection
+			//if 5 == len(s.srv.Peers()){
+			//	log.Warn("all peers in the whitelist are connected!")
+			//	s.pickPeerInfo()
+			//	// remove a node
+			//	s.randomRemove()
+			//	s.DisconnectPeers()
+			//	s.pickPeerInfo()
+			//}
+
+			// normal use to print information of connected peers
+			//s.pickPeerInfo()
+
 			startTime := mclock.Now()
 			defer func() {
 				log.Debug("peer disconnected", "reason", err)
@@ -101,7 +128,9 @@ func (s *Server) Start(protocols []*Protocol) error {
 	if err := s.srv.Start(); err != nil {
 		return err
 	}
+
 	if !s.opts.NoDiscovery {
+
 		if err := s.listenDiscV5(); err != nil {
 			return err
 		}
@@ -122,6 +151,7 @@ func (s *Server) Start(protocols []*Protocol) error {
 	log.Debug("start up", "self", s.Self())
 
 	s.goes.Go(s.dialLoop)
+
 	return nil
 }
 
@@ -185,6 +215,7 @@ func (s *Server) listenDiscV5() (err error) {
 	}
 
 	network, err := discv5.ListenUDP(s.opts.PrivateKey, conn, realaddr, "", s.opts.NetRestrict)
+
 	if err != nil {
 		return err
 	}
@@ -286,6 +317,17 @@ func (s *Server) dialLoop() {
 				continue
 			}
 
+			// by kasper
+			// control outbound peers
+			if s.srv.NetRestrict != nil{
+				if !s.srv.NetRestrict.Contains(node.IP) {
+					log.Debug("the node trying to dial is not in the whitelist, abandoned!", "node", node)
+					continue
+				}else {
+					log.Debug("contains in the whitelist, ready to dial", "node IP", node.IP)
+				}
+			}
+
 			log := log.New("node", node)
 			log.Debug("try to dial node")
 			s.dialingNodes.Add(node)
@@ -322,4 +364,80 @@ func (s *Server) tryDial(node *discover.Node) error {
 		return err
 	}
 	return s.srv.SetupConn(conn, 1, node)
+}
+
+// edit by kasper
+// pick the detailed ip info from peerinfo
+//var peerInfoCount int = 0
+func (s *Server) PickPeerInfo(){
+	for _, peerinfo := range s.srv.PeersInfo() {
+		ipString := strings.Split(peerinfo.Network.RemoteAddress, ":")
+		if len(ipString) > 1 {
+			ipA := net.ParseIP(ipString[0])
+			prefix_mask, _ := ipA.DefaultMask().Size()
+			isInbound:=peerinfo.Network.Inbound
+			log.Debug("Peer Info","IP: ", ipA, " Mask: ", prefix_mask,"isInbound:",isInbound)
+		} else {
+			log.Error("Peer IP Address", "ip", ipString)
+		}
+	}
+}
+
+// disconnect the peers that not contained in the whitelist any longer
+func (s *Server) DisconnectPeers(){
+	for _, peer := range s.srv.Peers(){
+		// tcp and upd maybe not matter
+		if tcp, ok := peer.RemoteAddr().(*net.TCPAddr); ok && !s.srv.NetRestrict.Contains(tcp.IP){
+			log.Info("Disconnect peer", "peer", peer)
+			peer.Disconnect(p2p.DiscUselessPeer)
+			// Sleep maybe useless
+			time.Sleep(2*time.Second)
+		}
+	}
+}
+
+// by kasper
+// disconnect the peers that not contained in the whitelist any longer
+func (s *Server) discPeers(){
+	for {
+		if len(s.srv.Peers()) > 4{
+			s.randomRemove()
+			log.Debug("Netrestrict", "Netrestrict", s.srv.NetRestrict)
+			for _, peer := range s.srv.Peers(){
+				// tcp and upd maybe not matter
+				if tcp, ok := peer.RemoteAddr().(*net.TCPAddr); ok && !s.srv.NetRestrict.Contains(tcp.IP){
+					log.Warn("Disconnect peer", "peer", peer)
+					peer.Disconnect(p2p.DiscUselessPeer)
+					time.Sleep(2*time.Second)
+				}
+			}
+			s.PickPeerInfo()
+		}
+	}
+}
+
+// by kasper
+// random remove an element from whitelist for testing
+func (s *Server) randomRemove() {
+	var netrestrict []string
+	netrestrict = append(netrestrict,"128.1.34.86/32")
+	netrestrict = append(netrestrict,"35.226.220.193/32")
+	netrestrict = append(netrestrict,"49.51.195.89/32")
+	netrestrict = append(netrestrict,"107.155.60.54/32")
+	netrestrict = append(netrestrict,"203.195.230.202/32")
+
+	i := rand.Intn(len(s.srv.Peers()))
+	log.Warn("Remove ip", "IP", netrestrict[i])
+
+	netrestrict = append(netrestrict[:i], netrestrict[i+1:]...)
+
+	netrestrict_arr := strings.Join(netrestrict,", ")
+
+	list, err := netutil.ParseNetlist(netrestrict_arr)
+	if err != nil {
+		//Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
+		log.Error("Option ",  "Set NetRestrict: ", err)
+	}
+
+	s.srv.NetRestrict = list
 }

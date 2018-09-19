@@ -34,7 +34,8 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
+	//"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 func initLogger(ctx *cli.Context) {
@@ -204,6 +205,7 @@ func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, ins
 		fmt.Println("parse -nat flag:", err)
 		os.Exit(1)
 	}
+
 	opts := &p2psrv.Options{
 		Name:           common.MakeName("thor", fullVersion()),
 		PrivateKey:     key,

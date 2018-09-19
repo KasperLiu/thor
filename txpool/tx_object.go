@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/builtin"
 )
 
 type txObject struct {
@@ -46,14 +47,28 @@ func (o *txObject) Origin() thor.Address {
 }
 
 func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header) (bool, error) {
+	// by kasper
+	// get block Interval
+	blockInterval := builtin.Params.Native(state).Get(thor.KeyBlockInterval).Uint64()
+
 	switch {
 	case o.Gas() > headBlock.GasLimit():
 		return false, errors.New("gas too large")
 	case o.IsExpired(headBlock.Number()):
 		return false, errors.New("expired")
-	case o.BlockRef().Number() > headBlock.Number()+uint32(3600*24/thor.BlockInterval):
+	// by kasper
+	//case o.BlockRef().Number() > headBlock.Number()+uint32(3600*24/thor.BlockInterval):
+	case o.BlockRef().Number() > headBlock.Number()+uint32(3600*24/blockInterval):
 		return false, errors.New("block ref out of schedule")
 	}
+
+	//edit by sion
+	var trader=builtin.Trader.Native(state)
+	signer,_:=o.Signer()
+	if listed,_:=trader.Get(signer);!listed{
+		return false,errors.New("builtin: invalid account")
+	}
+	//edit by sion
 
 	if _, err := chain.GetTransactionMeta(o.ID(), headBlock.ID()); err != nil {
 		if !chain.IsNotFound(err) {
@@ -83,7 +98,9 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	checkpoint := state.NewCheckpoint()
 	defer state.RevertTo(checkpoint)
 
-	if _, _, _, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval); err != nil {
+	// by kasper
+	//if _, _, _, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval); err != nil {
+	if _, _, _, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+blockInterval); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -95,3 +112,4 @@ func sortTxObjsByOverallGasPriceDesc(txObjs []*txObject) {
 		return gp1.Cmp(gp2) >= 0
 	})
 }
+

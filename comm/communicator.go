@@ -21,7 +21,6 @@ import (
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/p2psrv"
-	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -76,7 +75,9 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 		shouldSynced := func() bool {
 			bestBlockTime := c.chain.BestBlock().Header().Timestamp()
 			now := uint64(time.Now().Unix())
-			if bestBlockTime+thor.BlockInterval >= now {
+			// by kasper
+			//if bestBlockTime+thor.BlockInterval >= now {
+			if bestBlockTime+c.GetBlockInterval() >= now {
 				return true
 			}
 			if syncCount > 2 {
@@ -160,6 +161,11 @@ type txsToSync struct {
 	synced bool
 }
 
+// by kasper
+// The peer variable is the peer connected to you and provides
+// you with some basic information regarding the peer. The ws variable
+// which is a reader and a writer allows you to communicate with the peer.
+// If a message is being send to us by that peer the MsgReadWriter will handle it and vice versa.
 func (c *Communicator) servePeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := newPeer(p, rw)
 	c.goes.Go(func() {
@@ -196,7 +202,9 @@ func (c *Communicator) runPeer(peer *Peer) {
 	if localClock < remoteClock {
 		diff = remoteClock - localClock
 	}
-	if diff > thor.BlockInterval*2 {
+	// by kasper
+	//if diff > thor.BlockInterval*2 {
+	if diff > c.GetBlockInterval()*2 {
 		peer.logger.Debug("failed to handshake", "err", "sys time diff too large")
 		return
 	}
@@ -283,4 +291,11 @@ func (c *Communicator) PeersStats() []*PeerStats {
 		return stats[i].Duration < stats[j].Duration
 	})
 	return stats
+}
+
+// by kasper
+// get blockInterval from contract
+func (c *Communicator) GetBlockInterval() uint64 {
+	log.Debug("Get BlockInterval from txpool")
+	return c.txPool.GetBlockInterval()
 }
